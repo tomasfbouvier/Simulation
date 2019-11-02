@@ -33,6 +33,7 @@ int main(int argc , char **argv){
 		return -1;
 	}
 	const int n = atoi(argv[1]);
+    cout << "  . \n ..^____/ \n`-. ___ ) \n ||  || VIVA FRANCO" << endl;
 	ifstream file;
 	
 	file.open("results_order.txt", ios::in);
@@ -59,9 +60,6 @@ int main(int argc , char **argv){
     for (int t = 0 ; t < n ; t++){
         system.K = 0.0;
         verlet(&system , 0.0001);
-        cout << "K $$$$$$ ->" << system.K << endl;
-        cout << " U " << system.U << endl;
-        cout << " K + U " << system.U + system.K << endl;
         energies[t][0] = system.K;
         energies[t][1] = system.U;
         energies[t][2] = system.K + system.U;
