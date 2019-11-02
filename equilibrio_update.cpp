@@ -32,7 +32,7 @@ typedef struct {
 
 
 
-void verlet(Particulas *par, double pott, double cin);
+void verlet(Particulas *par, ofstream archivo);
 void potencial(Particulas ** par , int i , int j);
 
 
@@ -72,38 +72,57 @@ int main(int argc , char **argv){
 	}
 	archivo.close();
 	
+	ofstream archivo_energias;
+	archivo_energias.open("results_energias.txt", ios::out);
+	if(archivo_energias.fail()){
+		cout<<"no se pudo abrir el archivo"<<endl;
+		exit(1);
+	}
 	
-	for(int l=0; l<n; l++){
-		double U, K;
+	for(int i=0; i<n; i++){
+		double  rc=5,	U = - N*4*PI/(3.0*pow(rc,3)) , K=0.0;
 		
-		
-		verlet(&Part, U, K);
-		
-		cout << " K ::: $$$$ ::: -> " << K << endl;
-		//////////////// Correcci�n despues del bote /////////////////////	
+		verlet(&Part, archivo_energias);	
+
+		//////////////// Corrección despues del bote /////////////////////	
 		
 
-		if(l==2){
-			double Tq=E-U;
-			double d=Tq/K;
+///////////////////////ESTOS BUCLES SON HORRIBLES PERO NO QUEDA OTRA QUE TRABAJAR CON ELLOS PORQUE LA FUNCION NO ME LOS QUIERE DEVOLVER//////////////////////
 
-////////////Aqu� est� entrando cin=0 y no entiendo pq///////////////////////			
+		if(i==500){
+			for(int l=0; l<N-1; l++){
+				U+= Part.pot[l];
+				
+			}
+			for(int l=0; l<N; l++){
+				K+= Part.Ec[l];	
+			}			
 			
-			cout<<"d= "<<cin<<endl;
+	
+			
+			double Tq=E-U;
+			
+			double d=Tq/K;
+			
+			
+			cout<<"d= "<<d<<endl;
 			for(int j=0; j<N; j++){
 				
-//			(Part.vx[j]= Part.vx[j]/pow(d,0.5));
-//			(Part.vy[j]= Part.vy[j]/pow(d,0.5));
-//			(Part.vz[j]= Part.vz[j]/pow(d,0.5));
+			(Part.vx[j]= Part.vx[j]*pow(d,0.5));
+			(Part.vy[j]= Part.vy[j]*pow(d,0.5));
+			(Part.vz[j]= Part.vz[j]*pow(d,0.5));
 			
 			
-		/////////////////// YA NO PETA PERO NO ENTIENDO PQ NO DA !!!!!!!!!!!!/////////////////////////									
+		/////////////////// YA NO PETA PERO NO ENTIENDO PQ NO DA !!!!!!!!!!!!/////////////////////////
+		
+		////////////////// FIN DEl INTENTO DE CORRECCIÓN///////////////////////////////////////////							
 			}
 			
 		}
-		
 
 	}
+	
+	archivo_energias.close()
 
 
 	ofstream archivo_prima;
@@ -113,12 +132,7 @@ int main(int argc , char **argv){
 		exit(1);
 	}
 
-	ofstream archivo_prima2;
-	archivo_prima2.open("results_prime.txt", ios::out);
-	if(archivo_prima2.fail()){
-		cout<<"no se pudo abrir el archivo"<<endl;
-		exit(1);
-	}
+
 	
 	for(int i=0; i<N; i++){
 		archivo_prima<<Part.x[i]<<"\t";
@@ -133,33 +147,28 @@ int main(int argc , char **argv){
 		archivo_prima<<Part.pot[i]<<"\n";
 	}
 	archivo_prima.close();
-	archivo_prima2.close();
+
 		
 	
 
 	return 0;
 }	
 	
-void verlet(Particulas * par, double pott, double cin){
+void verlet(Particulas * par, ofstream archivo){
 ///////////////// This function makes an input system evolve in time dt and returns both kinetic and potencial energy/////////// 
 	
 	double dt=0.0001;
 	double rc= 5;
+	double U, cin;
 	double L=10;
 
 
- 	pott = - N*4*PI/(3.0*pow(rc,3));
+ 	U = - N*4*PI/(3.0*pow(rc,3));
     cin = 0.0;
 	
-	for(int i=0; i<N-1; i++){
-		par->pot[i]=0.0;
-		for(int j=i+1; j<N; j++){
-			potencial(&par , i , j);		
-		}
-		pott += par->pot[i];
-	}
+
 	
-	cout << "U ::: $$$$ ::: ->" << pott << endl;
+
 	
 	for(int i=0; i<N; i++){
 	
@@ -172,59 +181,73 @@ void verlet(Particulas * par, double pott, double cin){
 		par->ax_old[i] = par->ax_new[i];
 		par->ay_old[i] = par->ay_new[i];
 		par->az_old[i] = par->az_new[i];
-		cin +=  (par->vx[i]*par->vx[i] + par->vy[i]*par->vy[i]+par->vz[i]*par->vz[i])/2.0;
+		par->Ec[i] =  (par->vx[i]*par->vx[i] + par->vy[i]*par->vy[i]+par->vz[i]*par->vz[i])/2.0;
+		cin += par->Ec[i];
+		
 		
 		///////////////////paquete de instrucciones por si sale de la caja///////////////////
-		
 		if(par->x[i]<0){
 			par->x[i] += L;
 		}
-			else{
-				if(par->x[i]>L){
-					par->x[i] -= L;
-					
-				}
-				
+		else{
+			if(par->x[i]>L){
+				par->x[i] -= L;
 			}
+				
+		}
 			
-			
-		
-
 		if(par->y[i]<0){
 			par->y[i] += L;
 		}	
-			else{
-				if(par->y[i]>L){
-					par->y[i] -= L;
+		else{
+			if(par->y[i]>L){
+				par->y[i] -= L;
 					
-				}
-				
 			}
-			
-			
 				
-
+		}
+			
+			
 		if(par->z[i]<0){
 			par->z[i] += L;
 		
 		}
-			else{
-				if(par->z[i]>L){
-					par->z[i] -= L;
+		else{
+			if(par->z[i]>L){
+				par->z[i] -= L;
 					
-				}
-				
 			}
-			
-			
 				
-	
+		}
+				
+		
 	}
+	
+////////////////////// Este bucle no estoy seguro de que estea bien//////////////////
+	
+	for(int i=0; i<N-1; i++){
+		par->pot[i]=0.0;
+		for(int j=i+1; j<N; j++){
+			potencial(&par , i , j);		
+		}
+		U += par->pot[i];
+	}	
+	
 
-	cout<<"asd"<<cin<<endl;
+
+//////////////////////// Aquí pasa algo muy chungo /////////////////////////////
+	
+	archivo<<cin<<"\n";
+	archivo<<U<<"\n";
+
+	cout<<"E= "<<cin<<endl;
+	
+
 
 	return ;
 }
+
+
 
 void potencial(Particulas** par , int i , int j){
 	double rc=5, L=10, Fmod=0;
@@ -257,7 +280,7 @@ void potencial(Particulas** par , int i , int j){
 		else{
 			alpha= 1;
 		}
-									
+ 								
 	}
 				
 	ry-= alpha*L;		
@@ -283,8 +306,10 @@ void potencial(Particulas** par , int i , int j){
 	(*par)->pot[i] += aux;
 	(*par)->pot[j] += aux;
 	
-	// aqui tengo que cambiarlo para que actualice el potencial de cada particula
+
 	Fmod = 24*(2*pow(r,-12)-pow(r, -6))*pow(r, -2);
+	
+/////////////////////// Empiezo a sospechar que aquí hay algo que quizás no está bien	
 	
 	(*par)->ax_new[i]+= Fmod*rx/r;
 	(*par)->ay_new[i]+= Fmod*ry/r;
@@ -293,13 +318,18 @@ void potencial(Particulas** par , int i , int j){
 	(*par)->ay_new[j]+= -Fmod*ry/r;
 	(*par)->az_new[j]+= -Fmod*rz/r;
 	
-	
+
 
 	return;
-	
+
 }
 
 	
+
+
+
+
+
 
 
 
