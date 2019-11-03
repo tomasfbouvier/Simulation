@@ -63,13 +63,16 @@ int main(int argc , char **argv){
     for (int t = 0 ; t < n ; t++){
         system.K = 0.0;
         verlet(&system , 0.0001);
-        if(t==1500){
+        if(t==150000){
         	correction(&system);	
         }
         energies[t][0] = system.K;
         energies[t][1] = system.U;
         energies[t][2] = system.K + system.U;
         cout << "Iteration $$$ ::: --->> " << t << endl;
+        cout << "E -> " << system.U + system.K<< endl;
+        cout << "K -> " << system.K << endl;
+        cout << "U -> " << system.U << endl;
     }
     
     ofstream energy_file;
@@ -191,7 +194,7 @@ void compute_acc(box** BOX){
      */
     double rij[dim];
     double rsqd,f;
-    double U = - N*4*PI/(3.0*pow((*BOX)->length,3));
+    double U = - N*4*PI/(3.0*pow((*BOX)->length/2.0,3));
     for (int i = 0; i < N; i++) {  
         for (int k = 0; k < dim; k++) {
             (*BOX)->world[i].a[k] = 0;
