@@ -36,7 +36,7 @@ int main(int argc , char **argv){
 		return -1;
 	}
 	const int n = atoi(argv[1]);
-    cout << "  . \n ..^____/ \n`-. ___ ) \n ||  || VIVA FRANCO" << endl;
+    cout << "  . \n ..^____/ \n`-. ___ ) \n ||  || VIVA FRANCO | PLVS VLTRA" << endl;
 	ifstream file;
 	
 	file.open("results_cor.txt", ios::in);
