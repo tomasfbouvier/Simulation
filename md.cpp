@@ -22,10 +22,13 @@ typedef struct Box{
     double U;
 } box;
 
+
 void verlet(box*, double);
 double periodic(double, double);
 double keep_inside_box(double , double );
 void compute_acc(box**);
+void correction(box*);
+
 
 int main(int argc , char **argv){
 	if(argc != 2){
@@ -36,7 +39,7 @@ int main(int argc , char **argv){
     cout << "  . \n ..^____/ \n`-. ___ ) \n ||  || VIVA FRANCO" << endl;
 	ifstream file;
 	
-	file.open("results_order.txt", ios::in);
+	file.open("results_cor.txt", ios::in);
 	
 	if(file.fail()){
 		cout<< "/$$ -- FILE NOT FOUND -- $$/ " <<endl;
@@ -60,9 +63,13 @@ int main(int argc , char **argv){
     for (int t = 0 ; t < n ; t++){
         system.K = 0.0;
         verlet(&system , 0.0001);
+        if(t==1500){
+        	correction(&system);	
+        }
         energies[t][0] = system.K;
         energies[t][1] = system.U;
         energies[t][2] = system.K + system.U;
+        cout << "Iteration $$$ ::: --->> " << t << endl;
     }
     
     ofstream energy_file;
@@ -119,6 +126,28 @@ double keep_inside_box(double u , double L){
     return u;
 }
 
+void correction(box* BOX ){
+    /*
+    ---------------------------------
+    -> Description: Corrects the system after t steps in order to prevent the bounce effect in the total energy
+    -> Arguments:
+    @BOX box*: 
+    -> Output:
+    - void:
+    ---------------------------------
+     */	
+	
+	double KQ= E- BOX->U;
+	double d=KQ/BOX->K;
+
+	for(int i=0; i<N; i++){
+		for(int k=0; k<3; k++){
+			BOX->world[i].p[k] *= pow(d, 0.5);
+		}
+	}
+	return;
+}
+
 void verlet(box* BOX , double dt){
     /*
     ---------------------------------
@@ -162,7 +191,7 @@ void compute_acc(box** BOX){
      */
     double rij[dim];
     double rsqd,f;
-    double U = 0;
+    double U = - N*4*PI/(3.0*pow((*BOX)->length,3));
     for (int i = 0; i < N; i++) {  
         for (int k = 0; k < dim; k++) {
             (*BOX)->world[i].a[k] = 0;
