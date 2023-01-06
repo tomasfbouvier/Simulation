@@ -1,319 +1,346 @@
-#include<iostream>
-#include<fstream>
-#include<string.h>
-#include <stdlib.h>
-#include<math.h>
-#define N 500
-#define PI 3.14159265359
-#define E -605
-#define dim 3
-using namespace std;
+#include <iostream>
+#include <fstream>
+#include <cmath>
+#include <vector>
+#include <random>
+#include "molecular_dynamics.h"
 
 
+double E=T*kB*N_ATOMS;
 
-typedef struct Particle{
-    double r[dim];
-    double p[dim];
-    double a[dim];
-} particle;
+std::vector<Atom> generate_fcc_lattice(int N)
+{
+    std::vector<Atom> atoms;
 
-typedef struct Box{
-    particle world[N];
-    double length;
-    double K;
-    double U;
-    
-    double kinv;
-    double phivkinv;
-    double phiv;
-    double sqrdphivkinv;
-    double phivv;
-} box;
+    // Calculate number of atoms per side of lattice
+    int n_per_side = static_cast<int>(std::cbrt(N));
 
+    // Calculate lattice constant
+    double lattice_constant = box_size / n_per_side;
 
-void verlet(box*, double, int);
-double periodic(double, double);
-double keep_inside_box(double , double );
-void compute_acc(box**, int);
-void correction(box*);
-
-
-int main(int argc , char **argv){
-	if(argc != 2){
-		cout << " ---- Wrong number of arguments ---- " << endl;
-		return -1;
-	}
-	const float n = atof(argv[1]);
-    ifstream file;
-	
-	file.open("coordinates.txt", ios::in);
-	
-	if(file.fail()){
-		cout<< "/$$ -- FILE NOT FOUND -- $$/ " <<endl;
-		exit(1);
-	}
-    box system;
-    system.length = 10.0;
-    for (int i = 0 ; i < N ; i++){
-        file>>system.world[i].r[0];
-        file>>system.world[i].r[1];
-        file>>system.world[i].r[2];
-        file>>system.world[i].p[0];
-        file>>system.world[i].p[1];
-        file>>system.world[i].p[2];
-        file>>system.world[i].a[0];
-        file>>system.world[i].a[1];
-        file>>system.world[i].a[2];
+    // Generate FCC lattice with N atoms
+    for (int i = 0; i < n_per_side; i++)
+    {
+        for (int j = 0; j < n_per_side; j++)
+        {
+            for (int k = 0; k < n_per_side; k++)
+            {
+                Atom atom;
+                atom.symbol = "Si";
+                atom.x = i * lattice_constant;
+                atom.y = j * lattice_constant;
+                atom.z = k * lattice_constant;
+                
+                atoms.push_back(atom);
+            }
+        }
     }
-    file.close();
 
-
-
-    ofstream energy_file;
-	energy_file.open("results_energies.txt", ios::out);
-	if(energy_file.fail()){
-		cout<<"$$ | ENERGIES IS BROKEN | $$"<<endl;
-		exit(1);
-	}
-	
- 	ofstream meanval_file;
-	meanval_file.open("mean_values.txt", ios::app);
-	if(meanval_file.fail()){
-		cout<<"$$ | MEANVAL IS BROKEN | $$"<<endl;
-		exit(1);
-	}	
-	
-	ofstream coordinates_file;
-	coordinates_file.open("coordinates.txt", ios::out);
-	if(coordinates_file.fail()){
-		cout<<"Coordinates file is broken"<<endl;
-	}
+    // Initialize velocities to set net force and momentum to zero
+    std::random_device rd;
+    std::mt19937 rng(rd());
     
-    
-    
-	double sumK=0;
-    double sumU=0;
-	double sumE=0;
-	int a=0;
-	        
-    for (int t = 0 ; t < n ; t++){
-        system.K = 0.0; 
-        verlet(&system , 0.0001, t);
-    /*    if(t==5000){
-        	correction(&system);	
-        }*/
-
-
+    double sum_vx = 0, sum_vy = 0, sum_vz = 0;
+    for (Atom& atom : atoms)
+    {
         
-///////////////////////record results after each 10 steps///////////////////////////        
+        //std::cout<<"MyASDASDASD"<<std::sqrt(kB*T/mass)<<"\n";
+        std::normal_distribution<double> dist_vx(0, std::sqrt(kB*T/mass));
+        std::normal_distribution<double> dist_vy(0, std::sqrt(kB*T/mass));
+        std::normal_distribution<double> dist_vz(0, std::sqrt(kB*T/mass));
+
+        atom.vx = dist_vx(rng);
+        atom.vy = dist_vy(rng);
+        atom.vz = dist_vz(rng);
+
+        sum_vx += atom.vx;
+        sum_vy += atom.vy;
+        sum_vz += atom.vz;
+    }
+    
+    correct_energies(atoms);
+
+    for (Atom& atom : atoms)
+    {
+        atom.vx -= sum_vx / N;
+        atom.vy -= sum_vy / N;
+        atom.vz -= sum_vz / N;
+    }
+    
+    calculate_forces(atoms);
+    
+    for (Atom& atom : atoms)
+    {
+        atom.ax_prev = atom.ax;
+        atom.ay_prev = atom.ay;
+        atom.az_prev = atom.az;
+    }
+    
+    return atoms;
+}
+
+void calculate_forces(std::vector<Atom>& atoms)
+{
+// Calculate forces acting on each atom
+    for (Atom& atom : atoms)
+    {
+        atom.ax = 0;
+        atom.ay = 0;
+        atom.az = 0;
+    }
+
+    for (int i = 0; i < N_ATOMS -1; i++)
+    {
+        for (int j = i + 1; j < N_ATOMS; j++)
+        {
+            
+            double dx = atoms[j].x - atoms[i].x;
+            double dy = atoms[j].y - atoms[i].y;
+            double dz = atoms[j].z - atoms[i].z;
+            
+            // Account for periodic boundary conditions
+            
+            if (dx >= box_size/2.) dx -= box_size;
+            if (dx < -box_size/2.) dx += box_size;
+            if (dy >= box_size/2.) dy -= box_size;
+            if (dy < -box_size/2.) dy += box_size;
+            if (dz >= box_size/2.) dz -= box_size;
+            if (dz < -box_size/2.) dz += box_size;
+            
+            double r2 = dx*dx + dy*dy + dz*dz;
+            double F =  24 * epsilon/(mass*sigma*sigma) * (2 * std::pow(sigma*sigma/r2, 7) - std::pow(sigma*sigma/r2, 4));
+            
+            atoms[i].ax -= F * dx;
+            atoms[i].ay -= F * dy;
+            atoms[i].az -= F * dz;
+            
+            atoms[j].ax += F * dx;
+            atoms[j].ay += F * dy;
+            atoms[j].az += F * dz;
+
+        }
+    }
+}
+
+
+void update_atoms_verlet(std::vector<Atom>& atoms)
+{
+    // Calculate forces acting on each atom
+    // Update positions and velocities using velocity Verlet integration
+    for (Atom& atom : atoms)
+    {
+        // Update positions
+        atom.x += atom.vx * dt + 0.5 * atom.ax * dt * dt;
+        atom.y += atom.vy * dt + 0.5 * atom.ay * dt * dt;
+        atom.z += atom.vz * dt + 0.5 * atom.az * dt * dt;
+    }
+
+    // Keep inside the box
+    apply_periodic_boundary_conditions(atoms);
+    
+    // Calculate new forces
+    calculate_forces(atoms);
+    
+    for (Atom& atom : atoms)
+    {
+        // Update velocities
+        atom.vx += 0.5 * (atom.ax + atom.ax_prev) * dt;
+        atom.vy += 0.5 * (atom.ay + atom.ay_prev) * dt;
+        atom.vz += 0.5 * (atom.az + atom.az_prev) * dt;
         
-        if(t%100==0){
-         	sumK += system.K;
-	   		sumU += system.U;
-			energy_file << system.K << " " << system.U << " " << system.K + system.U << "\n";			
+        atom.ax_prev = atom.ax;
+        atom.ay_prev = atom.ay;
+        atom.az_prev = atom.az;
+    }
+}
+
+void update_atoms_euler(std::vector<Atom>& atoms)
+{
+    for (Atom& atom : atoms)
+    {
+        // Update velocity
+        atom.vx += atom.ax * dt;
+        atom.vy += atom.ay * dt;
+        atom.vz += atom.az * dt;
+
+        // Update position
+        atom.x += atom.vx * dt;
+        atom.y += atom.vy * dt;
+        atom.z += atom.vz * dt;
+
+        // Keep inside the box
+        apply_periodic_boundary_conditions(atoms);
+        
+    }
+
+}
+
+double calculate_potential_energy(std::vector<Atom>& atoms)
+{
+    
+    // Add correction term to potential energy
+    double energy =  - N_ATOMS*(N_ATOMS-1) * 4. * M_PI * epsilon * sigma * sigma * sigma / (3 * r_cut * r_cut * r_cut);
+    for (int i = 0; i < N_ATOMS -1; i++)
+    {
+        for (int j = i + 1; j < N_ATOMS; j++)
+        {
+            double dx = atoms[j].x - atoms[i].x;
+            double dy = atoms[j].y - atoms[i].y;
+            double dz = atoms[j].z - atoms[i].z;
+            
+            // Account for periodic boundary conditions
+            
+            if (dx >= box_size/2.) dx -= box_size;
+            if (dx < -box_size/2.) dx += box_size;
+            if (dy >= box_size/2.) dy -= box_size;
+            if (dy < -box_size/2.) dy += box_size;
+            if (dz >= box_size/2.) dz -= box_size;
+            if (dz < -box_size/2.) dz += box_size;
+            
+            double r2 = dx*dx + dy*dy + dz*dz;
+            
+            if (r2 < r_cut*r_cut)
+            {
+                
+                double r_6 = pow(sigma*sigma / r2, 3);
+                double r_12 = r_6 * r_6;
+                energy += 4 * epsilon * (r_12 - r_6);
+            }
+        }
+    }
+    return energy;
+}
+
+
+void correct_energies(std::vector<Atom>& atoms)
+{
+    double scale_factor=1.;
+    kinetic_energy=0.;
+    potential_energy=0.;
+    for (int i = 0; i < N_ATOMS; i++)
+    {
+        kinetic_energy += 0.5 * mass * (atoms[i].vx * atoms[i].vx + atoms[i].vy * atoms[i].vy + atoms[i].vz * atoms[i].vz);
+    }
+    
+    potential_energy = calculate_potential_energy(atoms);
+
+    
+    scale_factor = pow((E - potential_energy)/kinetic_energy , 0.5) ;
+    
+    for (int i = 0; i < N_ATOMS; i++)
+    {
+        atoms[i].vx *= scale_factor;
+        atoms[i].vy *= scale_factor;
+        atoms[i].vz *= scale_factor;
+    }
+    
+    kinetic_energy*= scale_factor*scale_factor;
+}
+
+
+void apply_periodic_boundary_conditions(std::vector<Atom>& atoms)
+{
+    
+    for (int i = 0; i < N_ATOMS; i++)
+    {
+        if (atoms[i].x < 0.) atoms[i].x += box_size;
+        if (atoms[i].x > box_size) atoms[i].x -= box_size;
+        if (atoms[i].y < 0.) atoms[i].y += box_size;
+        if (atoms[i].y > box_size) atoms[i].y -= box_size;
+        if (atoms[i].z < 0.) atoms[i].z += box_size;
+        if (atoms[i].z > box_size) atoms[i].z -= box_size;
+    }
+}
+
+void check_for_nan(const std::vector<Atom>& atoms)
+{
+    for (const Atom& atom : atoms)
+    {
+        if (std::isnan(atom.x) || std::isnan(atom.y) || std::isnan(atom.z))
+        {
+            std::cerr << "Error: Found nan value in atom positions!" << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+        if (std::isnan(atom.vx) || std::isnan(atom.vy) || std::isnan(atom.vz))
+        {
+            std::cerr << "Error: Found nan value in atom velocities!" << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+        if (std::isnan(atom.ax) || std::isnan(atom.ay) || std::isnan(atom.az))
+        {
+            std::cerr << "Error: Found nan value in atom accelerations!" << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+
+    }
+
+    if (std::isnan(kinetic_energy) || std::isnan(potential_energy))
+    {
+        std::cerr << "Error: Found nan value in energy data!" << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+}
+
+
+int main()
+{
+    // Set up constants
+
+
+    // Generate FCC lattice
+    std::vector<Atom> atoms = generate_fcc_lattice(N_ATOMS);
+
+    // Open XYZ file for writing
+    std::ofstream xyz_file("lattice.xyz");
+    std::ofstream energies_file("energies.txt");
+    // Evolve system for N_STEPS time steps
+    for (int step = 0; step < N_STEPS; step++)
+    {
+
+        // Evolve system
+
+        check_for_nan(atoms);
+        update_atoms_verlet(atoms);
+        
+        std::cout<<step<<"\n";
+
+        if (step % 100 == 0)
+        {
+            correct_energies(atoms);
+            std::cout<<step<<"\t"<<"kinetic_energy: "<<kinetic_energy<<"\t"<<"potential_energy: "<<potential_energy<<"\t"<<"total_energy diff: "<<E-(kinetic_energy+potential_energy)<<"\n";
+            // Do something with the energies (e.g. print them, store them, etc.)
+        }
+
+        // Write atoms to XYZ file
+        xyz_file << N_ATOMS << std::endl;
+        xyz_file << "Silicon FCC Lattice" << std::endl;
+        for (const Atom& atom : atoms)
+        {
+            xyz_file << atom.symbol << " ";
+            xyz_file << atom.x << " ";
+            xyz_file << atom.y << " ";
+            xyz_file << atom.z << std::endl;
         }
         
-    	if(t%1000==0){
-    		cout<<"t= "<<t<<endl;
-    		
-    	}    
-
-        	
         
-    /*No me gusta nada este bucle pero bueno */
+        kinetic_energy=0.;
+        potential_energy=0.;
+        for (int i = 0; i < N_ATOMS; i++)
+        {
+            kinetic_energy += 0.5 * mass * (atoms[i].vx * atoms[i].vx + atoms[i].vy * atoms[i].vy + atoms[i].vz * atoms[i].vz);
+
             
+        }
+        potential_energy = calculate_potential_energy(atoms);
 
-	   	a=t;
-	    	
+        
+        energies_file << kinetic_energy << "\t" << potential_energy << "\t"  << E << "\n";
     }
-
-	cout<<"tmax= "<<a<<endl;    
     
-    meanval_file<<100*sumK/n<<" "<< 100*sumU/n<< " "<< 100*(sumK + sumU)/n<< " "<< 100*system.kinv/n<< " " <<100*system.phivkinv/n<< " " << 100*system.phiv/n<< " "<<100*system.sqrdphivkinv/n<< " "<<100*system.phivv/n<< "\n" ;
-     
-/* Record coordinates at the end to prepare next simulation */    
-
-    for (int i = 0 ; i < N ; i++){
-        coordinates_file<<system.world[i].r[0]<<"\t";
-        coordinates_file<<system.world[i].r[1]<<"\t";
-        coordinates_file<<system.world[i].r[2]<<"\t";
-        coordinates_file<<system.world[i].p[0]<<"\t";
-        coordinates_file<<system.world[i].p[1]<<"\t";
-        coordinates_file<<system.world[i].p[2]<<"\t";
-        coordinates_file<<system.world[i].a[0]<<"\t";
-        coordinates_file<<system.world[i].a[1]<<"\t";
-        coordinates_file<<system.world[i].a[2]<<"\n";
-    }
-
-
-
-/////////////Closes files/////////////
     
-    energy_file.close();
-    
-    meanval_file.close();
-    
-    coordinates_file.close();
+
+    // Close XYZ file
+    xyz_file.close();
 
     return 0;
 }
-
-double periodic(double u , double L){
-    /*
-    ---------------------------------
-    -> Description:
-    -> Arguments:
-    @u double: Distance between two particles
-    @L double: Length of the box
-    -> Output:
-    - double: Maps the distance such that it preserves systems periodicity 
-    ---------------------------------
-     */
-    while (u < -0.5*L){
-        u += L;
-    }
-    while (u >= 0.5*L){
-        u -= L;
-    }
-    return u;
-}
-
-double keep_inside_box(double u , double L){
-    /*
-    ---------------------------------
-    -> Description:
-    -> Arguments:
-    @u double: Position of a particle
-    @L double: Length of the box
-    -> Output:
-    - double: Maps the distance such that it prevents a particle from escaping from the Box 
-    ---------------------------------
-     */
-    if (u < 0.0){
-        u += L;
-    }
-    else if (u > L){
-        u -= L;
-    }
-    return u;
-}
-
-void correction(box* BOX ){
-    /*
-    ---------------------------------
-    -> Description: Corrects the system after t steps in order to prevent the bounce effect in the total energy
-    -> Arguments:
-    @BOX box*: 
-    -> Output:
-    - void:
-    ---------------------------------
-     */	
-	
-	double KQ= E- BOX->U;
-	double d=KQ/BOX->K;
-
-	for(int i=0; i<N; i++){
-		for(int k=0; k<3; k++){
-			BOX->world[i].p[k] *= pow(d, 0.5);
-		}
-	}
-	return;
-}
-
-void verlet(box* BOX , double dt, int t){
-    /*
-    ---------------------------------
-    -> Description: Integrates newton's equations of motion 
-    -> Arguments:
-    @box* BOX: pointer to the struct containing all the system
-    @dt double: timestep
-    -> Output:
-    - void
-    ---------------------------------
-     */
-    BOX->K=0; 
-    for (int i = 0; i < N;i++){
-        for (int k = 0; k<dim;k++){
-            BOX->world[i].r[k] += BOX->world[i].p[k]*dt + 0.5*BOX->world[i].a[k]*dt*dt;
-            BOX->world[i].r[k] = keep_inside_box(BOX->world[i].r[k] , BOX->length);
-            BOX->world[i].p[k] += 0.5*BOX->world[i].a[k]*dt;
-        }    
-    }
-    compute_acc(& BOX, t);
-    for (int i = 0; i < N;i++){
-        for (int k = 0; k<dim;k++){
-            BOX->world[i].p[k] += 0.5*BOX->world[i].a[k]*dt;
-        }
-    }
-
-    if(t%100==0){    
-	    for (int i = 0 ; i < N ;i++){
-	        for (int k = 0; k < dim ;k++){
-				BOX->K += 0.5*(BOX->world[i].p[k])*(BOX->world[i].p[k]); 
-	
-		            
-		    }
-		}
-  	}  
-	///////////////////RECENTLY ADDED////////////////////////////    
-    if(t%100==0){
-	    BOX->kinv += 1/BOX->K;
-	    BOX->phivkinv += BOX->phiv/BOX->K;
-		BOX->sqrdphivkinv += BOX->phiv*BOX->phiv/BOX->K;
-    }  
-
-    
-    
-}
-
-void compute_acc(box** BOX, int t){
-    /*
-    ---------------------------------
-    -> Description: Calculates forces among particles within the system 
-    -> Arguments:
-    @BOX box**: pointer to the pointer containing the struct to enable members to be updated
-    -> Output:
-    - void
-    ---------------------------------
-     */
-    double rij[dim];
-    double rsqd,f;
-    double U = - N*4*PI/(3.0*pow((*BOX)->length*0.5,3));
-    for (int i = 0; i < N; i++) {  
-        for (int k = 0; k < dim; k++) {
-            (*BOX)->world[i].a[k] = 0;
-        }
-    }
-    for (int i = 0 ;i<N-1; i++){
-        for (int j = i+1 ; j<N;j++){
-            rsqd=0;
-            for (int k = 0;k < dim;k++){
-                rij[k] = periodic((*BOX)->world[i].r[k] - (*BOX)->world[j].r[k] , (*BOX)->length);
-                rsqd += rij[k]*rij[k]; 
-            }
-            
-            f = 24 * (2 * pow(rsqd, -7) - pow(rsqd, -4));
-
-            for (int k = 0; k < dim; k++) {
-                (*BOX)->world[i].a[k] += rij[k] * f;
-                (*BOX)->world[j].a[k] -= rij[k] * f;
-            }
-            
-            if(t%100==0){
-               
-	            (*BOX)->phiv += 1/(3*N/0.5)*f*pow(rsqd, 0.5);
-	            
-	            (*BOX)->phivv += 1/(3*N/0.5)*(1/(3*N/0.5)*(24 * (26 * pow(rsqd, -7) - 7*pow(rsqd, -4))*rsqd)-2*(*BOX)->phiv);
-	            U += 4*(pow(rsqd, -6) - pow (rsqd, -3));
-	       
-            }
-        }
-        if(t%100==0){
-        	(*BOX)->U = U;
-        }
-
-	}
-}
-
-
-
